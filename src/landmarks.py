@@ -1,191 +1,162 @@
-#!/usr/bin/env python
-
-"""Generate a 3D point cloud of a horn-like shape from a few parameters.
-
-Parameters
-----------
-    length: float = 5,                 
-    rotation: float = 2 * np.pi,       
-    curve_radius_start: float = 1.0,   # Optional: FIXED
-    curve_radius_end: float = 1.0,     # Optional: FIXED
-    curve_x: float = 1.0,              
-    curve_y: float = 1.0,              
-    beak_radius_start: float = 1.0,    
-    beak_radius_end: float = 0.1,      # Optional: FIXED
-"""
-
 import numpy as np
-from core import Vertex, Vector
+from typing import Tuple
+
+
+def _rotation_matrix_from_vectors(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Return rotation matrix that aligns vector a to vector b."""
+    a = a / np.linalg.norm(a)
+    b = b / np.linalg.norm(b)
+    v = np.cross(a, b)
+    c = np.dot(a, b)
+    s = np.linalg.norm(v)
+
+    if s == 0:
+        return np.eye(3)
+
+    vx = np.array([
+        [0, -v[2], v[1]],
+        [v[2], 0, -v[0]],
+        [-v[1], v[0], 0],
+    ])
+    return np.eye(3) + vx + vx @ vx * ((1 - c) / s**2)
 
 
 def _generate_horn_path(
-    length: float = 5,
-    curve_radius_start: float = 1,
-    curve_radius_end: float = None,
-    curve_x: float = 1,
-    curve_y: float = 1,
-    rotation: float = 2 * np.pi,
-    vector: np.ndarray = None,
-    num_intervals: int = 20,
+    length: float, twist: float, curve_x: float, curve_y: float, num_discs: int
 ) -> np.ndarray:
-    """Generate points along a spiral in x, y, z forming the multi-vector path that
-    the beak will follow.
-
-    Parameters
-    ----------
-    length: float
-        length of vector beak will follow (rotate around)
-    curve_radius_start: float
-        radius of circle around which beak is rotating at start
-    curve_radius_end: float
-        radius of circle around which beak is rotating at end
-    curve_x: float
-        multiplier of cosine rotation (0 - 1)
-    curve_y: float
-        multiplier of sin rotation (0 - 1)
-    rotation: ndarray
-        rotation of beak around circle in radians
-    vector: ndarray
-        unit vector path of beak; default=[0, 0, 1]
-    num_intervals: int
-        number of intervals at which points are sampled along vector
-    """
-    # defaults
-    curve_radius_end = curve_radius_start if curve_radius_end is None else curve_radius_end
-    vector = np.array([0, 0, 1]) if vector is None else vector
-
-    # curve_[x,y] scale the cos vs sin function between -1 and 1 magnitudes
-    curve_x = min(1, max(-1, curve_x))
-    curve_y = min(1, max(-1, curve_y))
-
-    # generate points for the surface
-    theta = np.linspace(0, rotation, num_intervals)
-    curve_radii = np.linspace(curve_radius_start, curve_radius_end, num_intervals)
-    x = curve_x * curve_radii * np.cos(theta)
-    y = curve_y * curve_radii * np.sin(theta)
-    z = np.linspace(0, length, num_intervals)
-
-    # Create the point cloud and center first point on [0, 0, 0]
-    point_cloud = np.column_stack((x, y, z))
-    point_cloud -= point_cloud[0]
-
-    # todo: rotate by vector ...
-    # ...
-    return point_cloud
+    """Generate 3D path of the horn's centerline."""
+    t = np.linspace(0, 1, num_discs)
+    z = t * length
+    angle = twist * t
+    x = curve_x * (1 - np.cos(angle))
+    y = curve_y * np.sin(angle)
+    return np.column_stack([x, y, z])
 
 
-def _get_distance_ratio(
-    p0: np.ndarray, p1: np.ndarray, p2: np.ndarray, p3: np.ndarray,
-) -> float:
-    """get ratio of rx and ry of circle"""
-    verts = [Vertex(i, j) for i, j in enumerate([p0, p1, p2, p3])]
-    v0 = Vector(verts[0], verts[2])
-    v1 = Vector(verts[1], verts[3])
-    return v0.dist / v1.dist
-
-
-def _generate_points_on_circle(
+def _generate_disc_points(
+    origin: np.ndarray,
+    normal: np.ndarray,
     radius: float,
     num_points: int,
-    vector: np.ndarray,
-    origin: np.ndarray,
-    correct=False,
 ) -> np.ndarray:
-    """Generate N points along the radius of a circle oriented in 3D space
-    by a vector, with the specified origin position.
-
-    Parameters
-    -----------
-    radius (float):
-        Radius of the circle.
-    num_points (int):
-        Number of points to generate.
-    vector (ndarray):
-        3D vector representing the orientation of the circle.
-    origin (ndarray):
-        3D vector representing the origin position of the circle.
     """
-    theta_test = np.array([0, np.pi / 2, np.pi, np.pi * 3 / 2])
+    Generate a ring of 3D points lying on a plane orthogonal to normal.
 
-    # get rotation matrix
+    Parameters:
+        origin: (3,) center of the disc
+        normal: (3,) vector perpendicular to the disc
+        radius: float, radius of the disc
+        num_points: number of points on the disc
+
+    Returns:
+        np.ndarray of shape (num_points, 3)
+    """
+    normal = normal / np.linalg.norm(normal)
+    if np.allclose(normal, [0, 1, 1]):
+        u = np.array([1.0, 0.0, 0.0])
+    else:
+        u = np.cross(normal, [0, 1, 0])
+        u /= np.linalg.norm(u)
+    v = np.cross(normal, u)
+    v /= np.linalg.norm(v)
+
     theta = np.linspace(0, 2 * np.pi, num_points, endpoint=False)
-    u = np.cross(vector, [1, 0, 0])
-    if np.linalg.norm(u) < 1e-6:
-        u = np.cross(vector, [0, 1, 0])
-    u = u / np.linalg.norm(u)
-    v = np.cross(vector, u)
-
-    # ensure it is a circle instead of ellipse
-    if correct:
-        points = (
-            origin + radius * np.outer(np.cos(theta_test), u)
-            + radius * np.outer(np.sin(theta_test), v)
-        )
-        ratio = _get_distance_ratio(*points)
-        v *= ratio
-
-    # get points along circumference of circle
-    points = (
-        origin
-        + radius * np.outer(np.cos(theta), u)
-        + radius * np.outer(np.sin(theta), v)
-    )
-    return points
+    circle = origin + radius * (np.outer(np.cos(theta), u) + np.outer(np.sin(theta), v))
+    return circle.astype(np.float32)
 
 
 def get_beak_landmarks(
-    length: float = 5,                 #
-    rotation: float = 2 * np.pi,       #
-    curve_radius_start: float = 1.0,
-    curve_radius_end: float = 1.0,
-    curve_x: float = 1.0,              #
-    curve_y: float = 1.0,              #
-    beak_radius_start: float = 1.0,    #
-    beak_radius_end: float = 0.1,
-    num_intervals: int = 20,
-    num_disc_points: int = 20,
+    start_radius: float,
+    end_radius: float,
+    length: float,
+    twist: float,
+    curve_x: float,
+    curve_y: float,
+    num_discs: int = 50,
+    num_points: int = 30,
+    reorient_base: bool = False,
 ) -> np.ndarray:
-    """Return array of 3D landmarks on a beak shape.
-
-    The beak shape is generated according to the parameters affecting
-    component lengths, radii, and curvatures, and with additional
-    parameters setting the number of landmark points to sample.
     """
-    # point cloud to fill
-    points = np.zeros((num_intervals, num_disc_points, 3), dtype=np.float32)
+    Generate a 3D curved horn-like structure as a (num_discs, num_points, 3) array.
 
-    # get path of beak
-    horn_path = _generate_horn_path(
-        length=length,
-        curve_radius_start=curve_radius_start,
-        curve_radius_end=curve_radius_end,
-        curve_x=curve_x,
-        curve_y=curve_y,
-        rotation=rotation,
-        num_intervals=num_intervals + 1,
-    )
+    Parameters:
+        start_radius: radius at the base of the horn
+        end_radius: radius at the tip of the horn
+        length: total length of the horn along the curved path
+        twist: number of radians to twist along the horn
+        curve_x: amplitude of curvature in X
+        curve_y: amplitude of curvature in Y
+        num_discs: number of cross-sections (rings)
+        num_points: number of points per disc
+        reorient_base: if True, rotate shape so base is horizontal and centered
 
-    # get radii of discs
-    radii = np.geomspace(beak_radius_start, beak_radius_end, num_intervals)
+    Returns:
+        np.ndarray of shape (num_discs, num_points, 3)
+    """
+    path = _generate_horn_path(length, twist, curve_x, curve_y, num_discs)
+    radii = np.linspace(start_radius, end_radius, num_discs)
+    cloud = np.empty((num_discs, num_points, 3), dtype=np.float32)
 
-    # get points on path as Vertex objects
-    vertices = [Vertex(i, horn_path[i]) for i in range(horn_path.shape[0])]
+    for i in range(num_discs):
+        origin = path[i]
+        if i == 0:
+            normal = path[1] - path[0]
+        elif i == num_discs - 1:
+            normal = path[-1] - path[-2]
+        else:
+            normal = path[i + 1] - path[i - 1]
+        normal /= np.linalg.norm(normal)
+        disc = _generate_disc_points(origin, normal, radii[i], num_points)
+        cloud[i] = disc
 
-    # fill point cloud with disc data
-    for i in range(len(vertices) - 1):
-        v = Vector(vertices[i], vertices[i + 1])
+    if reorient_base:
+        first_normal = path[1] - path[0]
+        first_normal /= np.linalg.norm(first_normal)
+        R = _rotation_matrix_from_vectors(first_normal, np.array([0.0, 0.0, 1.0]))
+        cloud = cloud @ R.T
 
-        points[i] = _generate_points_on_circle(
-            radius=radii[i],
-            num_points=num_disc_points,
-            vector=v.absolute,
-            origin=vertices[i].coords,
-            correct=True,
-        ).astype(np.float32)
-    return points
+    # Move first ring center to origin
+    center0 = cloud[0].mean(axis=0)
+    cloud -= center0
+
+    return cloud
+
+
+def landmarks_to_mesh(points: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Convert a (num_discs, num_points, 3) point cloud into a triangle mesh.
+
+    Returns:
+        vertices: (N, 3)
+        faces: (M, 3)
+    """
+    num_discs, num_points, _ = points.shape
+    vertices = points.reshape(-1, 3)
+    faces = []
+
+    for i in range(num_discs - 1):
+        for j in range(num_points):
+            a = i * num_points + j
+            b = i * num_points + (j + 1) % num_points
+            c = (i + 1) * num_points + j
+            d = (i + 1) * num_points + (j + 1) % num_points
+            faces.append((a, b, d))
+            faces.append((a, d, c))
+
+    return vertices, np.array(faces, dtype=np.int32)
 
 
 if __name__ == "__main__":
-    arr = get_beak_landmarks()
-    print(arr.shape)
-    print(arr)
+    # Generate the landmark cloud
+    cloud = get_beak_landmarks(
+        start_radius=1.0,
+        end_radius=0.3,
+        length=6.0,
+        twist=3 * np.pi,
+        curve_x=0.0,
+        curve_y=1.0,
+        num_discs=50,
+        num_points=40,
+        reorient_base=True,
+    )
+    print(cloud)
