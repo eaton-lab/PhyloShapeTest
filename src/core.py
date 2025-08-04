@@ -20,7 +20,8 @@ Vector:
 from dataclasses import dataclass, field
 from typing import Tuple, List, Optional, Sequence
 import numpy as np
-from scipy.spatial.transform import Rotation as Rot
+import transform
+
 
 @dataclass(frozen=True)
 class Vertex:
@@ -80,32 +81,22 @@ class Face:
             raise ValueError("Degenerate face: normal vector magnitude is zero.")
         return cross / norm
 
-    def transform_point_to_relative(self, point: np.ndarray) -> np.ndarray:
-        """Transform a 3D point to the local coordinate system of the face."""
-        p0, p1, p2 = self.coords()
-        x_axis = p1 - p0
-        x_axis /= np.linalg.norm(x_axis)
-        z_axis = np.cross(x_axis, p2 - p0)
-        z_axis /= np.linalg.norm(z_axis)
-        y_axis = np.cross(z_axis, x_axis)
-        R = np.vstack([x_axis, y_axis, z_axis]).T
-        return R.T @ (point - p0)
+    def to_relative(self, point):
+        """
+        Transform a 3D point to this face's local coordinate system.
+        """
+        return transform.transform_point_to_relative(self.coords, point)
 
-    def transform_point_to_global(self, point_local: np.ndarray) -> np.ndarray:
-        """Transform a 3D point from the face-local to the global coordinate system."""
-        p0, p1, p2 = self.coords()
-        x_axis = p1 - p0
-        x_axis /= np.linalg.norm(x_axis)
-        z_axis = np.cross(x_axis, p2 - p0)
-        z_axis /= np.linalg.norm(z_axis)
-        y_axis = np.cross(z_axis, x_axis)
-        R = np.vstack([x_axis, y_axis, z_axis]).T
-        return R @ point_local + p0
+    def to_global(self, relative_point):
+        """
+        Transform a point from this face's local system to global coordinates.
+        """
+        return transform.transform_point_to_global(self.coords, relative_point)
 
 
 @dataclass
 class Vector:
-    """Vector stores an edge connecting 2 Vertices and optionall a Face.
+    """Vector stores an edge connecting 2 Vertices and a Face.
     
     A vector can be transformed to a Face-relative coordinate system.
     """
@@ -139,13 +130,21 @@ class Vector:
             self._absolute = self.end.coords - self.start.coords
         return self._absolute
 
-    @property
-    def relative(self) -> np.ndarray:
-        if self._relative is None:
-            if self.face is None:
-                raise ValueError("Cannot compute relative vector without a face")
-            self._relative = transform_vector_to_relative(self.absolute, self.face.coords())
-        return self._relative
+    def to_relative(self):
+        """
+        Transform this vector to the face-relative coordinate system.
+        """
+        if self.face is None:
+            raise ValueError("Vector must have a reference face to compute relative coordinates.")
+        return transform.transform_vector_to_relative(self.face.coords, self.coords)
+
+    def to_global(self, relative_vec):
+        """
+        Transform a vector from face-relative to global coordinates using this vector's face.
+        """
+        if self.face is None:
+            raise ValueError("Vector must have a reference face to compute global coordinates.")
+        return transform.transform_vector_to_global(self.face.coords, relative_vec)        
 
     def __repr__(self):
         return f"Vector({self.start.id}, {self.end.id})"

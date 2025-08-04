@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "phyloshapetest"
+version = "0.1.0"
+description = "3D geometric and phylogenetic shape tools"
+authors = [{ name = "Deren Eaton", email = "your@email.com" }]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy >= 1.21",
+    "scipy >= 1.7"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["phyloshapetest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
