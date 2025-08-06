@@ -85,13 +85,13 @@ class Face:
         """
         Transform a 3D point to this face's local coordinate system.
         """
-        return transform.transform_point_to_relative(self.coords, point)
+        return transform.transform_point_to_relative(self.coords(), point)
 
     def to_global(self, relative_point):
         """
         Transform a point from this face's local system to global coordinates.
         """
-        return transform.transform_point_to_global(self.coords, relative_point)
+        return transform.transform_point_to_global(self.coords(), relative_point)
 
 
 @dataclass
@@ -188,10 +188,10 @@ if __name__ == "__main__":
         v2 = Vertex(id=2, coords=np.array([0.0, 1.0, 0.0]))
         face = Face((v0, v1, v2))
         p = np.array([0.0, 0.0, 1.0])
-        rel = face.transform_point_to_relative(p)
+        rel = face.to_relative(p)
         expected = np.array([0.0, 0.0, 1.0])
         assert np.allclose(rel, expected), f"Expected {expected}, got {rel}"
-        global_p = face.transform_point_to_global(rel)
+        global_p = face.to_global(rel)
         assert np.allclose(global_p, p), f"Expected global {p}, got {global_p}"
 
     test_transform_point_to_relative()
@@ -211,7 +211,8 @@ if __name__ == "__main__":
         print(V)
         print(V.dist)
         print(V.absolute)
-        print(V.relative)
+        print(V.to_relative())
+        print(V.to_global(V.to_relative()))
         print(v0)
         print(Vertex(id=5, coords=np.array([100.2341, 22.0, 0], dtype=np.float32)))
 

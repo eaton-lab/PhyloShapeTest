@@ -93,10 +93,15 @@ def get_beak_landmarks(
     Returns:
         np.ndarray of shape (num_discs, num_points, 3)
     """
+    # expand twist
+    twist = np.pi * twist
+
+    # fill arrays
     path = _generate_horn_path(length, twist, curve_x, curve_y, num_discs)
     radii = np.linspace(start_radius, end_radius, num_discs)
     cloud = np.empty((num_discs, num_points, 3), dtype=np.float32)
 
+    # get disk rings at each point, treat end disks slightly different
     for i in range(num_discs):
         origin = path[i]
         if i == 0:
@@ -109,6 +114,7 @@ def get_beak_landmarks(
         disc = _generate_disc_points(origin, normal, radii[i], num_points)
         cloud[i] = disc
 
+    # ensure the first ring is flat on z plane
     if reorient_base:
         first_normal = path[1] - path[0]
         first_normal /= np.linalg.norm(first_normal)
@@ -152,7 +158,7 @@ if __name__ == "__main__":
         start_radius=1.0,
         end_radius=0.3,
         length=6.0,
-        twist=3 * np.pi,
+        twist=3,
         curve_x=0.0,
         curve_y=1.0,
         num_discs=50,
