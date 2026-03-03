@@ -94,7 +94,7 @@ def get_beak_landmarks(
         np.ndarray of shape (num_discs, num_points, 3)
     """
     # expand twist
-    twist = np.pi * twist
+    twist = abs(np.pi * twist)
 
     # fill arrays
     path = _generate_horn_path(length, twist, curve_x, curve_y, num_discs)

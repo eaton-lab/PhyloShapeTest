@@ -46,19 +46,6 @@ def simulate_phylo_beaks(
     data.columns = LABELS
     return data
 
-    # cloud = get_beak_landmarks(
-    #     start_radius=1.0,
-    #     end_radius=0.3,
-    #     length=6.0,
-    #     twist=3 * np.pi,
-    #     curve_x=0.0,
-    #     curve_y=1.0,
-    #     num_discs=num_discs,
-    #     num_points=num_points,
-    #     reorient_base=reorient_base,
-    # )
-    # print(cloud)
-
 
 if __name__ == "__main__":
 
@@ -73,11 +60,17 @@ if __name__ == "__main__":
         DATADIR.mkdir(exist_ok=True)
 
         seed = RNG.integers(0, 1e9)
-        tree = toytree.rtree.unittree(ntips=10, treeheight=1, seed=seed)
+
+        # most trait SD=1 so tree-height=2 expects ~2 SD of change from 
+        # root to tip.
+        tree = toytree.rtree.unittree(ntips=10, treeheight=2, seed=seed)
+
+        # set internal node names
+        tree.set_node_data("nidx", {i: f"f{i.idx}" for i in tree}, inplace=True)
 
         # write seed and tree to file
         with open(DATADIR / "setup.txt", "w") as out:
-            out.write(f"SEED={seed}\nTREE={tree.write()}")
+            out.write(f"SEED={seed}\nTREE={tree.write(internal_labels='nidx')}")
 
         # simulate parameters
         data = simulate_phylo_beaks(tree, seed=seed)

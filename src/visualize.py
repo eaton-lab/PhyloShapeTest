@@ -208,7 +208,7 @@ if __name__ == "__main__":
         start_radius=3.0,
         end_radius=0.3,
         length=20.0,
-        twist=-3. * np.pi,
+        twist=-3.,
         curve_x=0,
         curve_y=3,
     )
@@ -218,8 +218,8 @@ if __name__ == "__main__":
         start_radius=3.0,
         end_radius=0.3,
         length=20.0,
-        twist=-0. * np.pi,
-        curve_x=-3,
+        twist=2,
+        curve_x=3,
         curve_y=3,
     )
 
